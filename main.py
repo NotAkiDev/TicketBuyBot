@@ -11,6 +11,8 @@ from aiogram import Dispatcher, Bot, types, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardRemove
+from aiohttp.web_fileresponse import content_type
+
 from messages import Answer
 from dotenv import dotenv_values
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -103,14 +105,14 @@ def SendMail(ImgFileName, caption):
         img_data = f.read()
 
     msg = MIMEMultipart()
-    msg['Subject'] = "Новый закал"
-    msg['From'] = "AkiroSaito@yandex.com"
+    msg['Subject'] = "Новый заказ"
+    msg['From'] = config.get("mail_login")
     msg['To'] = "telnykhtimofei@yandex.ru"
 
-    text = MIMEText("test")
+    text = MIMEText(caption)
     msg.attach(text)
     image = MIMEImage(img_data, name=os.path.basename(ImgFileName))
-    msg.attach(caption)
+    msg.attach(image)
 
     s = smtplib.SMTP(config.get("mail_server"), int(config.get("mail_port")))
     s.ehlo()
@@ -121,7 +123,7 @@ def SendMail(ImgFileName, caption):
     s.quit()
 
 
-@dp.message(StateFilter(StateMachine.PAY_FOR_TICKET))
+@dp.message(StateFilter(StateMachine.PAY_FOR_TICKET), F.photo)
 async def process_photo(message: types.Message, state: FSMContext):
     data = await state.get_data()
     print(data["BIRTHDAY"], type(data["BIRTHDAY"]))
@@ -145,12 +147,45 @@ async def process_photo(message: types.Message, state: FSMContext):
     # Чтение и прикрепление файла
     with open(photo_path, "rb"):
         file_name = os.path.basename(photo_path)
-        SendMail(file_name, caption)
+        try:
+            SendMail(file_name, caption)
+        except Exception:
+            pass
 
     await message.answer(Answer.SEND_CONFIRMATION.value)
 
     os.remove(photo_path)
 
+
+@dp.message(StateFilter(StateMachine.PAY_FOR_TICKET), F.document)
+async def process_photo(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    print(data["BIRTHDAY"], type(data["BIRTHDAY"]))
+    UsersTable.create(tg_id=message.chat.id, full_name=data["TAKE_NAME"], birthday=data["BIRTHDAY"],
+                      phone=data["PHONE_NUM"])
+    caption = f'Новая покупка\nФИО: {data["TAKE_NAME"]}\nТелефон: {data["PHONE_NUM"]}\nДата рождения: {data["BIRTHDAY"].strftime("%d.%m.%Y")}'
+
+    file_id = message.document.file_id
+    file_info = await bot.get_file(file_id)
+    downloaded_file = await bot.download_file(file_info.file_path)
+    await bot.send_document(chat_id=message.chat.id, document=file_id, caption=caption)
+
+    current_directory = os.getcwd()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    photo_path = os.path.join(current_directory, f"photo_{timestamp}.jpg")
+
+    # Сохраняем фото в текущий каталог
+    with open(photo_path, "wb") as file:
+        file.write(downloaded_file.read())
+
+    # Чтение и прикрепление файла
+    with open(photo_path, "rb"):
+        file_name = os.path.basename(photo_path)
+        SendMail(file_name, caption)
+
+    await message.answer(Answer.SEND_CONFIRMATION.value)
+
+    os.remove(photo_path)
 
 async def main():
     await dp.start_polling(bot)
