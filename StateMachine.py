@@ -8,4 +8,3 @@ class StateMachine(StatesGroup):
     BIRTHDAY = State()
     PHONE_NUM = State()
     PAY_FOR_TICKET = State()
-    SEND_CONFIRMATION = State()

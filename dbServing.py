@@ -1,3 +1,4 @@
+from aiogram.utils.formatting import PhoneNumber
 from peewee import *
 from dotenv import dotenv_values
 import datetime
@@ -26,8 +27,7 @@ class BaseModel(Model):
 # UsersTable
 class UsersTable(BaseModel):
     tg_id = CharField()
-    full_name = CharField()  # User's full name
-    birthday = DateTimeField()
-    username = CharField()  # User's username (optional)
-    is_attached = BooleanField(default=False)  # Default to False
+    full_name = CharField(null=True)  # User's full name
+    birthday = DateTimeField(null=True)
+    phone = CharField(null=True)
 
